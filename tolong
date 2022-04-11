@@ -1,0 +1,75 @@
+#define BLYNK_TEMPLATE_ID "TMPLPlr9szxU"
+#define BLYNK_DEVICE_NAME "OH"
+#define BLYNK_AUTH_TOKEN "xYmmQMuzYam5yCL2BcXS5f_JxZ6DH8UL"
+
+#define BLYNK_PRINT SwSerial
+
+#include <SoftwareSerial.h>
+SoftwareSerial SwSerial(10,11);
+
+#include <BlynkSimpleStream.h>
+#include <DHT.h>
+#include <DHT_U.h>
+
+
+boolean state = false;
+char auth[] = BLYNK_AUTH_TOKEN;
+BLYNK_CONNECTED()
+{
+  Blynk.syncAll();
+}
+
+#define DHTPIN 2
+#define DHTTYPE DHT11
+
+DHT dht(DHTPIN, DHTTYPE);
+BlynkTimer timer;
+
+void sendSensor()
+{
+  float h = dht.readHumidity();
+  float t = dht.readTemperature();
+
+  if (isnan(h) || isnan(t)){
+    SwSerial.println("mampus");
+    return;
+  }
+  Blynk.virtualWrite(V0, t);
+}
+
+void getSendData()
+{
+  int sensorValue = analogRead(A0);
+  Blynk.virtualWrite(V2, sensorValue);
+  
+  if(sensorValue<500){
+  Blynk.logEvent("notify","wooee");
+}
+  pinMode(A0,INPUT);
+}
+void setup() 
+{
+  SwSerial.begin(9600);
+  Serial.begin(9600);
+  Blynk.begin(Serial,auth);
+
+  dht.begin();
+
+  timer.setInterval(1000L, sendSensor);
+  timer.setInterval(1000L, getSendData);
+
+}
+
+void loop() {
+
+  HttpClient http;
+String link = "http://jagorobot.pythonanywhere.com/kirimwa";
+  http.begin(link);
+  int httpCode = http.GET();
+  Serial.println(httpCode);
+
+  
+  Blynk.run();
+  timer.run();
+
+}
