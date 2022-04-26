@@ -1,75 +1,96 @@
-#define BLYNK_TEMPLATE_ID "TMPLPlr9szxU"
-#define BLYNK_DEVICE_NAME "OH"
-#define BLYNK_AUTH_TOKEN "xYmmQMuzYam5yCL2BcXS5f_JxZ6DH8UL"
 
-#define BLYNK_PRINT SwSerial
+#define BLYNK_TEMPLATE_ID "TMPLWiOwJ-Tk"
+#define BLYNK_DEVICE_NAME "Wemos"
+#define BLYNK_PRINT Serial
 
-#include <SoftwareSerial.h>
-SoftwareSerial SwSerial(10,11);
-
-#include <BlynkSimpleStream.h>
+#include <ESP8266WiFi.h>
+#include <BlynkSimpleEsp8266.h>
+#include <ESP8266HTTPClient.h>
+#include "base64.h"
 #include <DHT.h>
-#include <DHT_U.h>
 
-
-boolean state = false;
-char auth[] = BLYNK_AUTH_TOKEN;
-BLYNK_CONNECTED()
-{
-  Blynk.syncAll();
-}
-
-#define DHTPIN 2
-#define DHTTYPE DHT11
-
+#define DHTPIN 2          // What digital pin we're connected to
+#define DHTTYPE DHT11     // DHT 11
 DHT dht(DHTPIN, DHTTYPE);
+
+
+char auth[] = "t87raSzr9qIQIl9ChXP-ljMdGCizC-yX";
+char ssid[] = "AdministratorSB";
+char pass[] = "SumurBatu8168";
+
 BlynkTimer timer;
 
-void sendSensor()
-{
-  float h = dht.readHumidity();
-  float t = dht.readTemperature();
+float temp = dht.readTemperature();
+String account_sid = "AC4f2f00ad2aa521d729d024c9e205f14c";
+String auth_token = "1480216f8740bba78d838a5c2a6c42ab";
+String from = "14155238886";
+String to = "6285710870302";
+String body = "PERINGATAN SUHU TELAH MENCAPAI : " + String (temp);
 
-  if (isnan(h) || isnan(t)){
-    SwSerial.println("mampus");
-    return;
-  }
-  Blynk.virtualWrite(V0, t);
-}
+void setup()
+{
 
-void getSendData()
-{
-  int sensorValue = analogRead(A0);
-  Blynk.virtualWrite(V2, sensorValue);
-  
-  if(sensorValue<500){
-  Blynk.logEvent("notify","wooee");
-}
-  pinMode(A0,INPUT);
-}
-void setup() 
-{
-  SwSerial.begin(9600);
+  // Debug console
   Serial.begin(9600);
-  Blynk.begin(Serial,auth);
+  WiFi.begin(ssid, pass);
+  Blynk.begin(auth, ssid, pass);
 
   dht.begin();
 
   timer.setInterval(1000L, sendSensor);
-  timer.setInterval(1000L, getSendData);
 
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.println("Connecting to WiFi..");
+  }
+  Serial.println("Connected to WiFi");
 }
 
-void loop() {
-
-  HttpClient http;
-String link = "http://jagorobot.pythonanywhere.com/kirimwa";
-  http.begin(link);
-  int httpCode = http.GET();
-  Serial.println(httpCode);
-
-  
+void loop()
+{
   Blynk.run();
   timer.run();
 
+  if (temp >= 40) {
+
+    if (WiFi.status() == WL_CONNECTED) {
+
+      HTTPClient http;
+      WiFiClient client;
+
+      String link = "http://dhimasbm.pythonanywhere.com/kirimwa?account_sid=" + account_sid + "&auth_token=" + auth_token + "&to_wa=" + to + "&from_wa=" + from + "&body_message=" + body;
+
+      http.begin(client, link);
+      int httpCode = http.GET();
+      Serial.println(httpCode);
+
+      if (httpCode > 0) { //Check for the returning code
+
+        String payload = http.getString();
+        Serial.println(link);
+        Serial.println(httpCode);
+        Serial.println(payload);
+      }
+      else  {
+        Serial.println("Error on HTTP request");
+      }
+      http.end();
+    }
+  }
+  }
+
+void sendSensor()
+{
+  float h = dht.readHumidity();
+  float t = dht.readTemperature(); // or dht.readTemperature(true) for Fahrenheit
+
+  if (isnan(h) || isnan(t)) {
+    Serial.println("Failed to read from DHT sensor!");
+    return;
+  }
+  // You can send any value at any time.
+  // Please don't send more that 10 values per second.
+  Blynk.virtualWrite(V1, h);
+  Blynk.virtualWrite(V0, t);
 }
+
