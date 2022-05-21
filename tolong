@@ -1,20 +1,30 @@
-if(wtrDetect >= 80){
-      digitalWrite(BUZZERPIN,HIGH);
-      waktuSekarang = millis();
-      waktuSebelum = 0;
-      setWaktu = 5000;
-      if(waktuSekarang - waktuSebelum == setWaktu){
-      String link = "http://dhimasbm.pythonanywhere.com/sendwa?account_sid=" + account_sid + "&auth_token=" + auth_token + "&to_wa=" + to + "&from_wa=" + from + "&body_message=" + body[1];     
-      http.begin(client, link);
-      int httpCode = http.GET();
-      waktuSebelum = waktuSekarang;
-      if(httpCode > 0) { //Check for the returning code       
-        String payload = http.getString();
-        Serial.println(payload);
-      }
-      else{
-        digitalWrite(BUZZERPIN,LOW);
-        Serial.println("Error on HTTP request");
-      }
-      http.end();
-      }
+#include <iostream>
+
+bool hasReached = false;
+
+if (wtrDetect >= 80 && !hasReached)
+{
+  digitalWrite(BUZZERPIN, HIGH);
+  waktuSekarang = millis();
+  waktuSebelum = 0;
+  setWaktu = 5000;
+  hasReached = true;
+}
+if (waktuSekarang - waktuSebelum == setWaktu)
+{
+  String link = "http://dhimasbm.pythonanywhere.com/sendwa?account_sid=" + account_sid + "&auth_token=" + auth_token + "&to_wa=" + to + "&from_wa=" + from + "&body_message=" + body[1];
+  http.begin(client, link);
+  int httpCode = http.GET();
+  waktuSebelum = waktuSekarang;
+  if (httpCode > 0)
+  { // Check for the returning code
+    String payload = http.getString();
+    Serial.println(payload);
+  }
+  else
+  {
+    digitalWrite(BUZZERPIN, LOW);
+    Serial.println("Error on HTTP request");
+  }
+  http.end();
+}
