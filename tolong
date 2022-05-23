@@ -1,30 +1,201 @@
-#include <iostream>
+  
+#define BLYNK_TEMPLATE_ID "TMPLWiOwJ-Tk"
+#define BLYNK_DEVICE_NAME "Wemos"
+#define BLYNK_PRINT Serial
 
-bool hasReached = false;
 
-if (wtrDetect >= 80 && !hasReached)
+#include <math.h>
+#include <ESP8266WiFi.h>
+#include <BlynkSimpleEsp8266.h>
+#include <ESP8266HTTPClient.h>
+#include "base64.h"
+#include <DHT.h>
+#include <ThingESP.h>
+
+
+#define DHTPIN 2          // What digital pin we're connected to
+#define DHTTYPE DHT11     // DHT 11
+DHT dht(DHTPIN, DHTTYPE);
+
+#define WATERPIN A0
+#define BUZZERPIN 4
+
+
+ThingESP8266 thing("dhimasbm", "wemos", "SB1868");
+
+char auth[] = "t87raSzr9qIQIl9ChXP-ljMdGCizC-yX";
+char ssid[] = "AdministratorSB";
+char pass[] = "SumurBatu8168";
+
+BlynkTimer timer;
+unsigned long waktuSekarang;
+unsigned long waktuSebelum = 0;
+const unsigned long setWaktu = 5000;
+bool isReached = false;
+
+float temp,hum,norep_temp,setAlarm;
+int wtrDetect;
+
+String account_sid = "AC4f2f00ad2aa521d729d024c9e205f14c";
+String auth_token = "4d1c71e54e62dc1ffb8727009bb8dd3d";
+String from = "14155238886";
+String to = "6285710870302";
+String body[] = { "PERINGATAN SUHU TELAH MENCAPAI : " , "PERMUKAAN OBJEK BERAIR"};
+
+void setup()
 {
-  digitalWrite(BUZZERPIN, HIGH);
-  waktuSekarang = millis();
-  waktuSebelum = 0;
-  setWaktu = 5000;
-  hasReached = true;
+
+  // Debug console
+  Serial.begin(9600);
+  WiFi.begin(ssid, pass);
+  Blynk.begin(auth, ssid, pass);
+  dht.begin();
+  
+  pinMode(WATERPIN,INPUT);
+  pinMode(BUZZERPIN,OUTPUT);
+  
+  timer.setInterval(1000L, sendSensor);
+  while (WiFi.status() != WL_CONNECTED) {
+    
+  Serial.println("Connecting to WiFi..");
+  }
+  Serial.println("Connected to WiFi");
+
+  thing.SetWiFi(ssid,pass);
+  thing.initDevice();
+
 }
-if (waktuSekarang - waktuSebelum == setWaktu)
-{
-  String link = "http://dhimasbm.pythonanywhere.com/sendwa?account_sid=" + account_sid + "&auth_token=" + auth_token + "&to_wa=" + to + "&from_wa=" + from + "&body_message=" + body[1];
-  http.begin(client, link);
-  int httpCode = http.GET();
-  waktuSebelum = waktuSekarang;
-  if (httpCode > 0)
-  { // Check for the returning code
-    String payload = http.getString();
-    Serial.println(payload);
+
+String HandleResponse(String query){
+  String qtemp = "CEK TEMPERATURE";
+  String qhum = "CEK KELEMBABAN";
+  query.toUpperCase();
+  
+  if(query == qtemp){
+    return "SUHU BERADA PADA " + String(temp) + "℃";
+  }
+  else if(query == qhum){
+    return "KELEMBABAN BERADA PADA " + String(hum) +" %";
   }
   else
-  {
-    digitalWrite(BUZZERPIN, LOW);
-    Serial.println("Error on HTTP request");
-  }
-  http.end();
+  return "Perintah tidak dipahami";
 }
+
+void loop(){
+  Blynk.run();
+  timer.run();
+  thing.Handle();
+ }
+
+void sendSensor(){ 
+
+  hum = dht.readHumidity();
+  temp = dht.readTemperature(); // or dht.readTemperature(true) for Fahrenheit
+  wtrDetect = analogRead(WATERPIN);
+  Serial.println(wtrDetect);
+  
+  if (isnan(hum) || isnan(temp)) {
+    Serial.println("Failed to read from DHT sensor!");
+    return;
+  }
+  Serial.println(isReached);
+  alertFunc();
+  dewpoint(temp,hum);
+  Serial.println(isReached);
+ 
+  Blynk.virtualWrite(V1, hum);
+  Blynk.virtualWrite(V0, temp);
+  Blynk.virtualWrite(V3,temp);
+  
+}
+
+void dewpoint(float x,float y){
+  float z;
+  float a,b,c;
+  a = 17.62;
+  b = 243.12;
+  c = log(y/100) +a*x/(b+x);
+  z = (b * c) / (a - c);
+    
+  Blynk.virtualWrite(V4,z);
+  
+  if (z >= x-2){
+     tone(BUZZERPIN,30,500);
+   }else{
+     noTone(BUZZERPIN);
+   }
+ }
+
+ BLYNK_CONNECTED(){
+  
+  Blynk.syncVirtual(V2);
+ }
+ 
+ BLYNK_WRITE(V2){
+    setAlarm = param.asFloat();
+}
+
+void alertFunc(){
+ 
+  if(fmod(temp,setAlarm)<= 0.9 && norep_temp != temp || floor(temp)-floor(norep_temp) == 5 || floor(norep_temp)-floor(temp) == 5 )
+  if (WiFi.status() == WL_CONNECTED){      
+    HTTPClient http;
+    WiFiClient client;
+    norep_temp = temp;
+  if(norep_temp >= setAlarm){
+    String link = "http://dhimasbm.pythonanywhere.com/sendwa?account_sid=" + account_sid + "&auth_token=" + auth_token + "&to_wa=" + to + "&from_wa=" + from + "&body_message=" + body[0] + String(temp);     
+    http.begin(client, link);
+    int httpCode = http.GET();
+  if(httpCode > 0) { //Check for the returning code       
+    String payload = http.getString();
+    Serial.println(payload);
+   }
+  else{
+    Serial.println("Error on HTTP request");
+   }
+  http.end();
+  }
+ }
+  if(wtrDetect >= 80 && !isReached){
+    if (WiFi.status() == WL_CONNECTED){      
+    HTTPClient http;
+    WiFiClient client;
+   String link = "http://dhimasbm.pythonanywhere.com/sendwa?account_sid=" + account_sid + "&auth_token=" + auth_token + "&to_wa=" + to + "&from_wa=" + from + "&body_message=" + body[1];     
+   http.begin(client, link);
+   int httpCode = http.GET();
+   isReached = true;
+   if(httpCode > 0) { //Check for the returning code       
+   String payload = http.getString();
+   Serial.println(payload);
+    }
+   else{
+   Serial.println("Error on HTTP request");
+    }
+   http.end();
+   }
+  }
+    
+   if(isReached == 1 && wtrDetect >= 80){
+    waktuSekarang = millis();    
+    if(waktuSekarang - waktuSebelum == setWaktu ){
+    if (WiFi.status() == WL_CONNECTED){      
+    HTTPClient http;
+    WiFiClient client;
+    String link = "http://dhimasbm.pythonanywhere.com/sendwa?account_sid=" + account_sid + "&auth_token=" + auth_token + "&to_wa=" + to + "&from_wa=" + from + "&body_message=" + body[1];     
+    http.begin(client, link);
+    int httpCode = http.GET();
+    waktuSebelum = waktuSekarang;
+   if(httpCode > 0) { //Check for the returning code       
+     String payload = http.getString();
+     Serial.println(payload);
+   }
+   else{
+    Serial.println("Error on HTTP request");
+     }
+   http.end();
+    }
+   }else{
+    isReached = false;
+   }
+  }
+ }
